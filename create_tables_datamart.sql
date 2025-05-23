@@ -1,0 +1,208 @@
+
+-- 1. DIM_TIEMPO
+CREATE TABLE DIM_TIEMPO (
+  id_tiempo INT IDENTITY(1,1) PRIMARY KEY,
+  fecha_inicio DATE,
+  fecha_fin DATE,
+  anio INT,
+  bimestre INT,
+  trimestre INT
+);
+
+-- 2. DIM_LOCALIZACION
+CREATE TABLE DIM_LOCALIZACION (
+  id_localizacion INT IDENTITY(1,1) PRIMARY KEY,
+  departamento NVARCHAR(50),
+  provincia NVARCHAR(50),
+  distrito NVARCHAR(50),
+);
+
+-- 3. DIM_CONCURSO
+CREATE TABLE DIM_CONCURSO (
+  id_concurso INT IDENTITY(1,1) PRIMARY KEY,
+  fondo NVARCHAR(50),
+  concurso NVARCHAR(100)
+);
+
+-- 4. DIM_MONEDA
+CREATE TABLE DIM_MONEDA (
+  id_moneda INT IDENTITY(1,1) PRIMARY KEY,
+  moneda NVARCHAR(20),
+  simbolo NVARCHAR(5)
+);
+
+-- 5. DIM_RANGO_MONTO
+CREATE TABLE DIM_RANGO_MONTO (
+  id_rango_monto INT PRIMARY KEY,
+  rango NVARCHAR(50)
+);
+
+--6. DIM_PROYECTOS
+CREATE TABLE DIM_PROYECTOS(
+	id_proyectos INT IDENTITY(1,1) PRIMARY KEY,
+	titulo NVARCHAR(MAX)
+);
+
+--7. DIM_EMPRESA
+CREATE TABLE DIM_EMPRESA(
+	id_empresa INT IDENTITY(1,1) PRIMARY KEY,
+	nombre NVARCHAR(255)
+);
+
+-- Tabla de hechos
+CREATE TABLE HECHOS_FINANCIAMIENTO (
+  id_hecho INT IDENTITY(1,1) PRIMARY KEY,
+  id_tiempo INT,
+  id_localizacion INT,
+  id_concurso INT,
+  id_moneda INT,
+  id_categoria_monto INT,
+  id_proyectos INT,
+  id_empresa INT,
+  monto_financiamiento DECIMAL(18,2),
+  FOREIGN KEY (id_tiempo) REFERENCES DIM_TIEMPO(id_tiempo),
+  FOREIGN KEY (id_localizacion) REFERENCES DIM_LOCALIZACION(id_localizacion),
+  FOREIGN KEY (id_concurso) REFERENCES DIM_CONCURSO(id_concurso),
+  FOREIGN KEY (id_moneda) REFERENCES DIM_MONEDA(id_moneda),
+  FOREIGN KEY (id_categoria_monto) REFERENCES DIM_RANGO_MONTO(id_rango_monto),
+  FOREIGN KEY (id_proyectos) REFERENCES DIM_PROYECTOS(id_proyectos),
+  FOREIGN KEY (id_empresa) REFERENCES DIM_EMPRESA(id_empresa)
+);
+
+-- POBLAR DATOS A DATA MART
+
+--PROBLAR DIMENSION TIEMPO
+INSERT INTO DIM_TIEMPO (fecha_inicio,fecha_fin,anio,bimestre,trimestre)
+SELECT DISTINCT
+  TRY_CAST(FECHA_INICIO AS DATE) AS fecha_inicio,
+  TRY_CONVERT(DATE, CAST(CAST(FECHA_FIN AS BIGINT) AS VARCHAR(8)), 112) AS fecha_fin,
+  CAST(ANIO AS INT) AS anio,
+  CEILING(MONTH(TRY_CAST(FECHA_INICIO AS DATE)) / 2.0) AS bimestre,
+  CEILING(MONTH(TRY_CAST(FECHA_INICIO AS DATE)) / 3.0) AS trimestre
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE
+ TRY_CAST(FECHA_INICIO AS DATE) IS NOT NULL AND
+  FECHA_FIN IS NOT NULL
+  AND ISNUMERIC(CAST(FECHA_FIN AS VARCHAR(20))) = 1
+  AND LEN(CAST(CAST(FECHA_FIN AS BIGINT) AS VARCHAR(8))) = 8
+  AND ISNUMERIC(ANIO) = 1 
+
+--PROBLAR DIMNENSION LOCATLIZATION
+
+INSERT INTO DIM_LOCALIZACION (departamento, provincia, distrito)
+SELECT DISTINCT 
+  LEFT(DEPARTAMENTO, 50),
+  LEFT(PROVINCIA, 50),
+  LEFT(DISTRITO, 50)
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE 
+  DEPARTAMENTO IS NOT NULL AND 
+  PROVINCIA IS NOT NULL AND 
+  DISTRITO IS NOT NULL AND
+  LEN(DISTRITO) <= 50 AND
+  LEN(PROVINCIA) <= 50 AND
+  LEN(DEPARTAMENTO) <= 50;
+
+-- POBLAR DIMENSION CONCURSO
+
+INSERT INTO DIM_CONCURSO (fondo, concurso)
+SELECT DISTINCT 
+  LEFT(FONDO, 50),
+  LEFT(CONCURSO, 100)
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE 
+  FONDO IS NOT NULL AND 
+  CONCURSO IS NOT NULL AND
+  LEN(CONCURSO) <= 100 AND
+  TRY_CAST(CONCURSO AS NVARCHAR(100)) IS NOT NULL;
+
+-- POBLAR DIMENSION MONEDA
+
+INSERT INTO DIM_MONEDA (moneda, simbolo)
+SELECT DISTINCT 
+  MONEDA,
+  CASE 
+    WHEN MONEDA = 'DOLARES' THEN '$'
+    WHEN MONEDA = 'SOLES' THEN 'S/'
+  END AS simbolo
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE 
+  MONEDA IN ('DOLARES', 'SOLES');
+
+
+-- POBLAR DIMESION RANGO-MONTO
+
+INSERT INTO DIM_RANGO_MONTO (id_rango_monto, rango)
+VALUES 
+  (1, 'Menor a 10,000'),
+  (2, '10,000 a 50,000'),
+  (3, '50,001 a 100,000'),
+  (4, 'Mayor a 100,000');
+
+-- POBLAR DIMENSION PROYECTOS
+
+INSERT INTO DIM_PROYECTOS (titulo)
+SELECT DISTINCT 
+  TITULO
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE TITULO IS NOT NULL;
+
+
+-- PROBLAR DIMENSION EMPRESA
+
+INSERT INTO DIM_EMPRESA (nombre)
+SELECT DISTINCT 
+  NOMBRE_SOLICITANTE
+FROM [Financiamiento].[dbo].[FINAL_DB$]
+WHERE 
+  NOMBRE_SOLICITANTE IS NOT NULL AND
+  -- Excluye si contiene solo números o puntos
+  NOMBRE_SOLICITANTE NOT LIKE '%[0-9]%' AND
+  TRY_CAST(NOMBRE_SOLICITANTE AS FLOAT) IS NULL;
+
+-- POBLAR ENTIDAD HECHOS
+
+INSERT INTO HECHOS_FINANCIAMIENTO (
+  id_tiempo,
+  id_localizacion,
+  id_concurso,
+  id_moneda,
+  id_categoria_monto,
+  id_proyectos,
+  id_empresa,
+  monto_financiamiento
+)
+SELECT
+  T.id_tiempo,
+  L.id_localizacion,
+  C.id_concurso,
+  M.id_moneda,
+  CASE 
+    WHEN F.MONTO_FINANCIERO < 10000 THEN 1                -- Menor a 10,000
+    WHEN F.MONTO_FINANCIERO BETWEEN 10000 AND 50000 THEN 2 -- 10,000 a 50,000
+    WHEN F.MONTO_FINANCIERO BETWEEN 50001 AND 100000 THEN 3 -- 50,001 a 100,000
+    ELSE 4                                                -- Mayor a 100,000
+  END AS id_categoria_monto,
+  P.id_proyectos,
+  E.id_empresa,
+  CAST(F.MONTO_FINANCIERO AS DECIMAL(18,2))
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_TIEMPO T ON 
+  T.anio = CAST(F.ANIO AS INT) AND 
+  T.fecha_corte = TRY_CAST(F.FECHA_CORTE AS DATE)
+JOIN DIM_LOCALIZACION L ON 
+  L.departamento = LEFT(F.DEPARTAMENTO, 50) AND
+  L.provincia = LEFT(F.PROVINCIA, 50) AND
+  L.distrito = LEFT(F.DISTRITO, 50)
+JOIN DIM_CONCURSO C ON 
+  C.fondo = LEFT(F.FONDO, 50) AND 
+  C.concurso = LEFT(F.CONCURSO, 100)
+JOIN DIM_MONEDA M ON 
+  M.moneda = F.MONEDA
+JOIN DIM_PROYECTOS P ON 
+  P.titulo = F.TITULO
+JOIN DIM_EMPRESA E ON 
+  E.nombre = F.NOMBRE_SOLICITANTE
+WHERE 
+  F.MONTO_FINANCIERO IS NOT NULL AND 
+  ISNUMERIC(F.MONTO_FINANCIERO) = 1;

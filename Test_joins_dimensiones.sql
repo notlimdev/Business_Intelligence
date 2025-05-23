@@ -1,0 +1,85 @@
+
+  -- TEST DE JOINS 
+
+
+  SELECT TOP 10 
+  F.ANIO, 
+  F.FECHA_CORTE, 
+  T.id_tiempo
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_TIEMPO T 
+  ON T.anio = CAST(F.ANIO AS INT)
+     AND T.fecha_corte = TRY_CAST(F.FECHA_CORTE AS DATE)
+WHERE 
+  ISNUMERIC(F.ANIO) = 1 AND 
+  TRY_CAST(F.FECHA_CORTE AS DATE) IS NOT NULL;
+
+--localizacion
+
+  SELECT TOP 10 
+  F.DEPARTAMENTO, F.PROVINCIA, F.DISTRITO, 
+  L.id_localizacion
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_LOCALIZACION L 
+  ON L.departamento = LEFT(F.DEPARTAMENTO, 50)
+     AND L.provincia = LEFT(F.PROVINCIA, 50)
+     AND L.distrito = LEFT(F.DISTRITO, 50)
+WHERE 
+  F.DEPARTAMENTO IS NOT NULL AND 
+  F.PROVINCIA IS NOT NULL AND 
+  F.DISTRITO IS NOT NULL;
+
+-- tiempo 
+
+SELECT TOP 10
+  F.FONDO,
+  F.CONCURSO,
+  C.id_concurso
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_CONCURSO C
+  ON C.fondo = LEFT(F.FONDO, 50)
+  AND C.concurso = LEFT(F.CONCURSO, 100)
+WHERE 
+  F.FONDO IS NOT NULL 
+  AND F.CONCURSO IS NOT NULL;
+
+  -- monedaa
+
+  SELECT TOP 10
+  F.MONEDA,
+  M.id_moneda
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_MONEDA M 
+  ON M.moneda = F.MONEDA
+WHERE F.MONEDA IN ('SOLES', 'DOLARES');
+
+--dimrango
+
+SELECT TOP 10
+  F.MONTO_FINANCIERO,
+  R.id_rango_monto
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_RANGO_MONTO R 
+  ON F.MONTO_FINANCIERO BETWEEN R.rango_min AND R.rango_max
+WHERE F.MONTO_FINANCIERO IS NOT NULL;
+
+--proyectos
+
+SELECT TOP 10
+  F.TITULO,
+  P.id_proyectos
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_PROYECTOS P 
+  ON P.titulo = LEFT(F.TITULO, 300)
+WHERE F.TITULO IS NOT NULL;
+
+--empresa
+
+SELECT TOP 10
+  F.NOMBRE_SOLICITANTE,
+  E.id_empresa
+FROM [Financiamiento].[dbo].[FINAL_DB$] F
+JOIN DIM_EMPRESA E 
+  ON E.nombre = LEFT(F.NOMBRE_SOLICITANTE, 100)
+WHERE F.NOMBRE_SOLICITANTE IS NOT NULL AND 
+      ISNUMERIC(F.NOMBRE_SOLICITANTE) = 0;
